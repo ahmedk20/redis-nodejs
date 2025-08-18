@@ -9,6 +9,9 @@ const server = net.createServer((connection) => {
     if (message === "PING") {
       connection.write("+PONG\r\n");
     }
+    if (message === "ECHO") {
+      connection.write(`$3\r\nhey\r\n`);
+    }
   });
 });
 
