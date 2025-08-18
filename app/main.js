@@ -3,8 +3,12 @@ const net = require("net");
 console.log("Logs from your program will appear here!");
 
 const server = net.createServer((connection) => {
-  connection.on("data", () => {
-    connection.write("+PONG\r\n");
+  connection.on("data", (data) => {
+    const message = data.toString().trim();
+
+    if (message === "PING") {
+      connection.write("+PONG\r\n");
+    }
   });
 });
 
