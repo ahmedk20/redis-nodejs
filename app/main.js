@@ -30,6 +30,7 @@ const server = net.createServer((connection) => {
       connection.write(`+OK\r\n`);
     } else if (parts[2] && parts[2].toUpperCase() === "GET") {
       const key = parts[4];
+      const entry = store[key];
       if (store[key]) {
         if (entry.expiry && Date.now() > entry.expiry) {
           delete store[key];
