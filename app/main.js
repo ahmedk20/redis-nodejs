@@ -17,14 +17,27 @@ const server = net.createServer((connection) => {
       const echoMessage = parts[4]; // this is the string after ECHO
       connection.write(`$${echoMessage.length}\r\n${echoMessage}\r\n`);
     } else if (parts[2] && parts[2].toUpperCase() === "SET") {
+      let expiry = null;
+      if (parts[8] && parts[8].toUpperCase() === "PX") {
+        const ttl = parseInt(parts[10], 10);
+        if (ttl) {
+          expiry = Date.now() + ttl;
+        }
+      }
       const key = parts[4];
       const value = parts[6];
-      store[key] = value;
+      store[key] = { value, expiry };
       connection.write(`+OK\r\n`);
     } else if (parts[2] && parts[2].toUpperCase() === "GET") {
       const key = parts[4];
       if (store[key]) {
-        connection.write(`+${store[key]}\r\n`);
+        if (entry.expiry && Date.now() > entry.expiry) {
+          delete store[key];
+          connection.write("$-1\r\n");
+        } else {
+          const value = entry.value;
+          connection.write(`$${value.length}\r\n${value}\r\n`);
+        }
       } else {
         connection.write(`$-1\r\n`);
       }
