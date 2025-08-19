@@ -1,6 +1,7 @@
 const net = require("net");
 
 console.log("Logs from your program will appear here!");
+const store = {};
 
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
@@ -15,6 +16,18 @@ const server = net.createServer((connection) => {
     } else if (parts[2] && parts[2].toUpperCase() === "ECHO") {
       const echoMessage = parts[4]; // this is the string after ECHO
       connection.write(`$${echoMessage.length}\r\n${echoMessage}\r\n`);
+    } else if (parts[2] && parts[2].toUpperCase() === "SET") {
+      const key = parts[4];
+      const value = parts[6];
+      store[key] = value;
+      connection.write(`+OK\r\n`);
+    } else if (parts[2] && parts[2].toUpperCase() === "GET") {
+      const key = parts[4];
+      if (store[key]) {
+        connection.write(`+${store[key]}\r\n`);
+      } else {
+        connection.write(`$-1\r\n`);
+      }
     }
   });
 });
