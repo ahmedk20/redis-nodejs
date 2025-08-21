@@ -42,6 +42,22 @@ const server = net.createServer((connection) => {
       } else {
         connection.write(`$-1\r\n`);
       }
+    } else if (parts[2] && parts[2].toUpperCase() === "RPUSH") {
+      const key = parts[4];
+      const value = parts[6];
+      if (!store[key]) {
+        store[key] = [];
+      }
+      store[key].push(value);
+      connection.write(`:${store[key].length}\r\n`);
+    } else if (parts[2] && parts[2].toUpperCase() === "LPOP") {
+      const key = parts[4];
+      if (store[key] && store[key].length > 0) {
+        const value = store[key].shift();
+        connection.write(`$${value.length}\r\n${value}\r\n`);
+      } else {
+        connection.write("$-1\r\n");
+      }
     }
   });
 });
