@@ -88,6 +88,32 @@ const server = net.createServer((connection) => {
         }
         break;
       }
+      case "LRANGE": {
+        const key = parts[4];
+        let start = parseInt(parts[6], 10);
+        let stop = parseInt(parts[8], 10);
+
+        const list = store[key] || [];
+
+        // Normalize negative indices
+        if (start < 0) start = list.length + start;
+        if (stop < 0) stop = list.length + stop;
+
+        // Clamp indices
+        start = Math.max(0, start);
+        stop = Math.min(list.length - 1, stop);
+
+        if (start > stop || list.length === 0) {
+          connection.write("*0\r\n");
+        } else {
+          const values = list.slice(start, stop + 1);
+          connection.write(`*${values.length}\r\n`);
+          values.forEach((value) => {
+            connection.write(`$${value.length}\r\n${value}\r\n`);
+          });
+        }
+        break;
+      }
 
       default:
         connection.write("-ERR unknown command\r\n");
