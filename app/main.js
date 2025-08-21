@@ -4,7 +4,7 @@ console.log("Logs from your program will appear here!");
 
 // In-memory store
 const store = {};
-
+const waitingClients = {}; // { key: [connection1, connection2, ...] }
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
     const message = data.toString();
@@ -75,8 +75,15 @@ const server = net.createServer((connection) => {
             store[key].unshift(values[i]);
           }
         }
+        if (waitingClients[key] && waitingClients[key].length > 0) {
+          const client = waitingClients[key].shift();
+          const val = store[key].shift(); // pop value for that client
+          client.write(
+            `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
+          );
+        }
 
-        connection.write(`:${store[key].length}\r\n`);
+        //connection.write(`:${store[key].length}\r\n`);
         break;
       }
 
@@ -144,6 +151,22 @@ const server = net.createServer((connection) => {
           connection.write(`:${store[key].length}\r\n`); // length of the list
         } else {
           connection.write("-ERR Wrong type, key is not a list\r\n");
+        }
+        break;
+      }
+      case "BLPOP": {
+        const key = parts[4];
+        const timeout = parseInt(parts[6]);
+        if (store[key] && store[key].length > 0) {
+          // Pop immediately
+          const val = store[key].shift();
+          connection.write(
+            `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
+          );
+        } else {
+          // Block (timeout ignored for now, assume 0 = infinite)
+          if (!waitingClients[key]) waitingClients[key] = [];
+          waitingClients[key].push(connection);
         }
         break;
       }
