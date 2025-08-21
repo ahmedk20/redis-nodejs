@@ -85,6 +85,17 @@ const server = net.createServer((connection) => {
           waitingClients[key].length > 0 &&
           store[key].length > 0
         ) {
+          const client = waitingClients[key].shift();
+          const val = store[key].shift();
+          client.write(
+            `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
+          );
+        }
+        while (
+          waitingClients[key] &&
+          waitingClients[key].length > 0 &&
+          store[key].length > 0
+        ) {
           const clientInfo = waitingClients[key].shift();
           const val = store[key].shift();
 
@@ -200,6 +211,25 @@ const server = net.createServer((connection) => {
 
           waitingClients[key].push(clientInfo);
         }
+        break;
+      }
+      case "TYPE": {
+        const key = parts[1];
+        const value = store[key];
+
+        let type;
+        if (value === undefined) {
+          type = "none";
+        } else if (Array.isArray(value)) {
+          type = "list";
+        } else if (typeof value === "string") {
+          type = "string";
+        } else {
+          // future-proof (sets, hashes, etc.)
+          type = "unknown";
+        }
+
+        conn.write(`+${type}\r\n`);
         break;
       }
 
