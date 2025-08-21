@@ -214,18 +214,18 @@ const server = net.createServer((connection) => {
         break;
       }
       case "TYPE": {
-        const key = parts[1];
-        const value = store[key];
+        const key = parts[4]; // should be parts[4], not parts[1] (bug fix)
+        const entry = store[key];
 
         let type;
-        if (value === undefined) {
+        if (!entry) {
           type = "none";
-        } else if (Array.isArray(value)) {
+        } else if (Array.isArray(entry)) {
           type = "list";
-        } else if (typeof value === "string") {
+        } else if (typeof entry === "object" && "value" in entry) {
+          // It's a SET key
           type = "string";
         } else {
-          // future-proof (sets, hashes, etc.)
           type = "unknown";
         }
 
