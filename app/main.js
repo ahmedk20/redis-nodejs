@@ -116,6 +116,16 @@ const server = net.createServer((connection) => {
         }
         break;
       }
+      case "LLEN": {
+        const key = parts[4];
+        if (!store[key]) {
+          connection.write(":0\r\n"); // no list found
+        } else if (Array.isArray(store[key])) {
+          connection.write(`:${store[key].length}\r\n`); // length of the list
+        } else {
+          connection.write("-ERR Wrong type, key is not a list\r\n");
+        }
+      }
 
       default:
         connection.write("-ERR unknown command\r\n");
