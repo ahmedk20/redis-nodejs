@@ -85,11 +85,17 @@ const server = net.createServer((connection) => {
           waitingClients[key].length > 0 &&
           store[key].length > 0
         ) {
-          const client = waitingClients[key].shift();
+          const clientInfo = waitingClients[key].shift();
           const val = store[key].shift();
-          client.write(
-            `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
-          );
+
+          if (clientInfo.active) {
+            if (clientInfo.timer) clearTimeout(clientInfo.timer); // ✅ clear timeout
+            clientInfo.active = false;
+
+            clientInfo.conn.write(
+              `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
+            );
+          }
         }
 
         // ✅ Always reply to RPUSH/LPUSH client with *newLength*
@@ -166,26 +172,33 @@ const server = net.createServer((connection) => {
       }
       case "BLPOP": {
         const key = parts[4];
-        const timeout = parseInt(parts[6], 10);
+        const timeout = parseFloat(parts[6]);
 
-        if (store[key] && store[key].length > 0) {
+        if (!store[key]) store[key] = [];
+
+        // If key already has data → return immediately
+        if (store[key].length > 0) {
           const val = store[key].shift();
           connection.write(
             `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
           );
         } else {
+          // Blocking logic
           if (!waitingClients[key]) waitingClients[key] = [];
-          waitingClients[key].push(connection);
 
+          const clientInfo = { conn: connection, active: true };
+
+          // If timeout > 0, set timer
           if (timeout > 0) {
-            setTimeout(() => {
-              const idx = waitingClients[key].indexOf(connection);
-              if (idx !== -1) {
-                waitingClients[key].splice(idx, 1);
-                connection.write("$-1\r\n"); // nil on timeout
+            clientInfo.timer = setTimeout(() => {
+              if (clientInfo.active) {
+                connection.write("$-1\r\n"); // RESP nil
+                clientInfo.active = false;
               }
             }, timeout * 1000);
           }
+
+          waitingClients[key].push(clientInfo);
         }
         break;
       }
