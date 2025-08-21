@@ -1,68 +1,101 @@
 const net = require("net");
 
 console.log("Logs from your program will appear here!");
+
+// In-memory store
 const store = {};
 
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
     const message = data.toString();
+    const parts = message.split("\r\n").filter((p) => p !== "");
 
-    // Break the RESP message into parts
-    const parts = message.split("\r\n");
-    // Example for ECHO pear: ["*2", "$4", "ECHO", "$4", "pear", ""]
+    // Command is always at parts[2] after splitting RESP
+    const command = parts[2] ? parts[2].toUpperCase() : null;
 
-    if (parts[2] && parts[2].toUpperCase() === "PING") {
-      connection.write("+PONG\r\n");
-    } else if (parts[2] && parts[2].toUpperCase() === "ECHO") {
-      const echoMessage = parts[4]; // this is the string after ECHO
-      connection.write(`$${echoMessage.length}\r\n${echoMessage}\r\n`);
-    } else if (parts[2] && parts[2].toUpperCase() === "SET") {
-      let expiry = null;
-      if (parts[8] && parts[8].toUpperCase() === "PX") {
-        const ttl = parseInt(parts[10], 10);
-        if (ttl) {
-          expiry = Date.now() + ttl;
+    switch (command) {
+      case "PING":
+        connection.write("+PONG\r\n");
+        break;
+
+      case "ECHO":
+        connection.write(`$${parts[4].length}\r\n${parts[4]}\r\n`);
+        break;
+
+      case "SET": {
+        const key = parts[4];
+        const value = parts[6];
+        let expiry = null;
+
+        if (parts[8] && parts[8].toUpperCase() === "PX") {
+          const ttl = parseInt(parts[10], 10);
+          if (!isNaN(ttl)) expiry = Date.now() + ttl;
         }
+
+        store[key] = { value, expiry };
+        connection.write("+OK\r\n");
+        break;
       }
-      const key = parts[4];
-      const value = parts[6];
-      store[key] = { value, expiry };
-      connection.write(`+OK\r\n`);
-    } else if (parts[2] && parts[2].toUpperCase() === "GET") {
-      const key = parts[4];
-      const entry = store[key];
-      if (store[key]) {
-        if (entry.expiry && Date.now() > entry.expiry) {
+
+      case "GET": {
+        const key = parts[4];
+        const entry = store[key];
+
+        if (!entry) {
+          connection.write("$-1\r\n");
+        } else if (entry.expiry && Date.now() > entry.expiry) {
           delete store[key];
           connection.write("$-1\r\n");
         } else {
           const value = entry.value;
           connection.write(`$${value.length}\r\n${value}\r\n`);
         }
-      } else {
-        connection.write(`$-1\r\n`);
+        break;
       }
-    } else if (parts[2] && parts[2].toUpperCase() === "RPUSH") {
-      const key = parts[4];
-      if (!store[key]) {
-        store[key] = [];
-      }
-      for (let i = 6; i < parts.length; i += 2) {
-        if (value && !value.startsWith("$") && !value.startsWith("*")) {
-          store[key].push(value);
+
+      case "RPUSH":
+      case "LPUSH": {
+        const key = parts[4];
+
+        if (!store[key]) store[key] = [];
+
+        // Determine values: everything after the key
+        const values = [];
+        for (let i = 6; i < parts.length; i++) {
+          const val = parts[i];
+          if (val && !val.startsWith("$") && !val.startsWith("*")) {
+            values.push(val);
+          }
         }
+
+        if (command === "RPUSH") {
+          store[key].push(...values);
+        } else {
+          store[key].unshift(...values);
+        }
+
+        connection.write(`:${store[key].length}\r\n`);
+        break;
       }
-      connection.write(`:${store[key].length}\r\n`);
-    } else if (parts[2] && parts[2].toUpperCase() === "LPOP") {
-      const key = parts[4];
-      if (store[key] && store[key].length > 0) {
-        const value = store[key].shift();
-        connection.write(`$${value.length}\r\n${value}\r\n`);
-      } else {
-        connection.write("$-1\r\n");
+
+      case "LPOP": {
+        const key = parts[4];
+        if (!store[key] || store[key].length === 0) {
+          connection.write("$-1\r\n");
+        } else {
+          const value = store[key].shift();
+          connection.write(`$${value.length}\r\n${value}\r\n`);
+        }
+        break;
       }
+
+      default:
+        connection.write("-ERR unknown command\r\n");
+        break;
     }
   });
 });
 
-server.listen(6379, "127.0.0.1");
+server.listen(6379, "127.0.0.1", () => {
+  console.log("Redis clone running on port 6379");
+});
