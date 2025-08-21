@@ -59,7 +59,7 @@ const server = net.createServer((connection) => {
 
         if (!store[key]) store[key] = [];
 
-        // Determine values: everything after the key
+        // Extract values
         const values = [];
         for (let i = 6; i < parts.length; i++) {
           const val = parts[i];
@@ -76,7 +76,10 @@ const server = net.createServer((connection) => {
           }
         }
 
-        // Serve waiting clients (only one value per client)
+        // ✅ Capture new length BEFORE serving waiting clients
+        const newLength = store[key].length;
+
+        // Serve blocked clients
         while (
           waitingClients[key] &&
           waitingClients[key].length > 0 &&
@@ -89,8 +92,8 @@ const server = net.createServer((connection) => {
           );
         }
 
-        // ✅ Always reply to the RPUSH/LPUSH client
-        connection.write(`:${store[key].length}\r\n`);
+        // ✅ Always reply to RPUSH/LPUSH client with *newLength*
+        connection.write(`:${newLength}\r\n`);
         break;
       }
 
