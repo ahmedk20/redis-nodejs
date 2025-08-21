@@ -85,8 +85,28 @@ const server = net.createServer((connection) => {
         if (!store[key] || store[key].length === 0) {
           connection.write("$-1\r\n");
         } else {
-          const value = store[key].shift();
-          connection.write(`$${value.length}\r\n${value}\r\n`);
+          if (parts.length > 5) {
+            const count = parseInt(parts[6]); // number of elements to pop
+            if (isNaN(count) || count <= 0) {
+              connection.write(
+                "-ERR value is not an integer or out of range\r\n"
+              );
+              break;
+            }
+
+            const popped = store[key].splice(0, count); // remove multiple
+            if (popped.length === 0) {
+              connection.write("$-1\r\n");
+            } else {
+              connection.write(`*${popped.length}\r\n`);
+              popped.forEach((el) => {
+                connection.write(`$${el.length}\r\n${el}\r\n`);
+              });
+            }
+          } else {
+            const value = store[key].shift();
+            connection.write(`$${value.length}\r\n${value}\r\n`);
+          }
         }
         break;
       }
