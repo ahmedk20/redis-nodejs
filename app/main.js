@@ -125,6 +125,7 @@ const server = net.createServer((connection) => {
         } else {
           connection.write("-ERR Wrong type, key is not a list\r\n");
         }
+        break;
       }
 
       default:
