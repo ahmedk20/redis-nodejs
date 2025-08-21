@@ -229,7 +229,7 @@ const server = net.createServer((connection) => {
           type = "unknown";
         }
 
-        conn.write(`+${type}\r\n`);
+        connection.write(`+${type}\r\n`);
         break;
       }
 
