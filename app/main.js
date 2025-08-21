@@ -75,15 +75,22 @@ const server = net.createServer((connection) => {
             store[key].unshift(values[i]);
           }
         }
-        if (waitingClients[key] && waitingClients[key].length > 0) {
+
+        // Serve waiting clients (only one value per client)
+        while (
+          waitingClients[key] &&
+          waitingClients[key].length > 0 &&
+          store[key].length > 0
+        ) {
           const client = waitingClients[key].shift();
-          const val = store[key].shift(); // pop value for that client
+          const val = store[key].shift();
           client.write(
             `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
           );
         }
 
-        //connection.write(`:${store[key].length}\r\n`);
+        // ✅ Always reply to the RPUSH/LPUSH client
+        connection.write(`:${store[key].length}\r\n`);
         break;
       }
 
