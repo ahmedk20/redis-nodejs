@@ -71,7 +71,9 @@ const server = net.createServer((connection) => {
         if (command === "RPUSH") {
           store[key].push(...values);
         } else {
-          store[key].unshift(...values);
+          for (let i = 0; i < values.length; i++) {
+            store[key].unshift(values[i]);
+          }
         }
 
         connection.write(`:${store[key].length}\r\n`);
