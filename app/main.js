@@ -156,17 +156,26 @@ const server = net.createServer((connection) => {
       }
       case "BLPOP": {
         const key = parts[4];
-        const timeout = parseInt(parts[6]);
+        const timeout = parseInt(parts[6], 10);
+
         if (store[key] && store[key].length > 0) {
-          // Pop immediately
           const val = store[key].shift();
           connection.write(
             `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
           );
         } else {
-          // Block (timeout ignored for now, assume 0 = infinite)
           if (!waitingClients[key]) waitingClients[key] = [];
           waitingClients[key].push(connection);
+
+          if (timeout > 0) {
+            setTimeout(() => {
+              const idx = waitingClients[key].indexOf(connection);
+              if (idx !== -1) {
+                waitingClients[key].splice(idx, 1);
+                connection.write("$-1\r\n"); // nil on timeout
+              }
+            }, timeout * 1000);
+          }
         }
         break;
       }
