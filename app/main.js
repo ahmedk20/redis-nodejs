@@ -209,7 +209,7 @@ const server = net.createServer((connection) => {
             }, timeout * 1000);
           }
 
-          waitingClients[key].push(clientInfo);
+          waitingClients[key].push({ socket: connection, start: Date.now() });
         }
         break;
       }
