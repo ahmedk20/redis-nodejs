@@ -217,7 +217,7 @@ const server = net.createServer((connection) => {
         const key = parts[4]; // should be parts[4], not parts[1] (bug fix)
 
         let type;
-        if (store.has(key)) {
+        if (store[key]) {
           connection.write(`+string\r\n`);
         } else {
           connection.write(`+none\r\n`);
