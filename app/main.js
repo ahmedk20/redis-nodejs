@@ -217,10 +217,14 @@ const server = net.createServer((connection) => {
         const key = parts[4]; // should be parts[4], not parts[1] (bug fix)
 
         let type;
-        if (store[key]) {
-          connection.write(`+string\r\n`);
+        if (!store[key]) {
+          connection.write("+none\r\n");
+        } else if (Array.isArray(store[key])) {
+          connection.write("+list\r\n");
+        } else if (typeof store[key] === "object" && "value" in store[key]) {
+          connection.write("+string\r\n");
         } else {
-          connection.write(`+none\r\n`);
+          connection.write("+none\r\n"); // fallback (shouldn’t normally happen)
         }
         break;
       }
