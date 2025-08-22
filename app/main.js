@@ -222,8 +222,6 @@ const server = net.createServer((connection) => {
         } else {
           connection.write(`+none\r\n`);
         }
-
-        connection.write(`+${type}\r\n`);
         break;
       }
 
