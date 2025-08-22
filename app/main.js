@@ -80,17 +80,8 @@ const server = net.createServer((connection) => {
         const newLength = store[key].length;
 
         // Serve blocked clients
-        while (
-          waitingClients[key] &&
-          waitingClients[key].length > 0 &&
-          store[key].length > 0
-        ) {
-          const client = waitingClients[key].shift();
-          const val = store[key].shift();
-          client.write(
-            `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
-          );
-        }
+
+        // Serve blocked clients
         while (
           waitingClients[key] &&
           waitingClients[key].length > 0 &&
@@ -100,7 +91,7 @@ const server = net.createServer((connection) => {
           const val = store[key].shift();
 
           if (clientInfo.active) {
-            if (clientInfo.timer) clearTimeout(clientInfo.timer); // ✅ clear timeout
+            if (clientInfo.timer) clearTimeout(clientInfo.timer);
             clientInfo.active = false;
 
             clientInfo.conn.write(
@@ -209,10 +200,11 @@ const server = net.createServer((connection) => {
             }, timeout * 1000);
           }
 
-          waitingClients[key].push({ socket: connection, start: Date.now() });
+          waitingClients[key].push(clientInfo); // ✅ store proper object
         }
         break;
       }
+
       case "TYPE": {
         const key = parts[4]; // should be parts[4], not parts[1] (bug fix)
 
