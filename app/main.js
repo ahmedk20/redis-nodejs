@@ -4,8 +4,7 @@ console.log("Logs from your program will appear here!");
 
 // In-memory store
 const store = {};
-const waitingClients = {}; // { key: [ { conn, active, timer } ] }
-
+const waitingClients = {}; // { key: [connection1, connection2, ...] }
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
     const message = data.toString();
@@ -77,26 +76,40 @@ const server = net.createServer((connection) => {
           }
         }
 
-        // ✅ Serve blocked clients before replying
+        // ✅ Capture new length BEFORE serving waiting clients
+        const newLength = store[key].length;
+
+        // Serve blocked clients
+        while (
+          waitingClients[key] &&
+          waitingClients[key].length > 0 &&
+          store[key].length > 0
+        ) {
+          const client = waitingClients[key].shift();
+          const val = store[key].shift();
+          client.write(
+            `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
+          );
+        }
         while (
           waitingClients[key] &&
           waitingClients[key].length > 0 &&
           store[key].length > 0
         ) {
           const clientInfo = waitingClients[key].shift();
+          const val = store[key].shift();
+
           if (clientInfo.active) {
-            if (clientInfo.timer) clearTimeout(clientInfo.timer);
+            if (clientInfo.timer) clearTimeout(clientInfo.timer); // ✅ clear timeout
             clientInfo.active = false;
 
-            const val = store[key].shift();
             clientInfo.conn.write(
               `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
             );
           }
         }
 
-        // ✅ Reply to the pushing client
-        const newLength = store[key].length;
+        // ✅ Always reply to RPUSH/LPUSH client with *newLength*
         connection.write(`:${newLength}\r\n`);
         break;
       }
@@ -107,7 +120,7 @@ const server = net.createServer((connection) => {
           connection.write("$-1\r\n");
         } else {
           if (parts.length > 5) {
-            const count = parseInt(parts[6]);
+            const count = parseInt(parts[6]); // number of elements to pop
             if (isNaN(count) || count <= 0) {
               connection.write(
                 "-ERR value is not an integer or out of range\r\n"
@@ -115,7 +128,7 @@ const server = net.createServer((connection) => {
               break;
             }
 
-            const popped = store[key].splice(0, count);
+            const popped = store[key].splice(0, count); // remove multiple
             if (popped.length === 0) {
               connection.write("$-1\r\n");
             } else {
@@ -131,7 +144,6 @@ const server = net.createServer((connection) => {
         }
         break;
       }
-
       case "LRANGE": {
         const key = parts[4];
         let start = parseInt(parts[6], 10);
@@ -158,19 +170,17 @@ const server = net.createServer((connection) => {
         }
         break;
       }
-
       case "LLEN": {
         const key = parts[4];
         if (!store[key]) {
-          connection.write(":0\r\n");
+          connection.write(":0\r\n"); // no list found
         } else if (Array.isArray(store[key])) {
-          connection.write(`:${store[key].length}\r\n`);
+          connection.write(`:${store[key].length}\r\n`); // length of the list
         } else {
           connection.write("-ERR Wrong type, key is not a list\r\n");
         }
         break;
       }
-
       case "BLPOP": {
         const key = parts[4];
         const timeout = parseFloat(parts[6]);
@@ -184,37 +194,33 @@ const server = net.createServer((connection) => {
             `*2\r\n$${key.length}\r\n${key}\r\n$${val.length}\r\n${val}\r\n`
           );
         } else {
+          // Blocking logic
           if (!waitingClients[key]) waitingClients[key] = [];
 
           const clientInfo = { conn: connection, active: true };
 
+          // If timeout > 0, set timer
           if (timeout > 0) {
             clientInfo.timer = setTimeout(() => {
               if (clientInfo.active) {
-                connection.write("$-1\r\n"); // RESP nil on timeout
+                connection.write("$-1\r\n"); // RESP nil
                 clientInfo.active = false;
               }
             }, timeout * 1000);
           }
 
-          waitingClients[key].push(clientInfo);
+          waitingClients[key].push({ socket: connection, start: Date.now() });
         }
         break;
       }
-
       case "TYPE": {
-        const key = parts[4];
-        const entry = store[key];
+        const key = parts[4]; // should be parts[4], not parts[1] (bug fix)
 
         let type;
-        if (!entry) {
-          type = "none";
-        } else if (Array.isArray(entry)) {
-          type = "list";
-        } else if (typeof entry === "object" && "value" in entry) {
-          type = "string";
+        if (store.has(key)) {
+          connection.write(`+string\r\n`);
         } else {
-          type = "unknown";
+          connection.write(`+none\r\n`);
         }
 
         connection.write(`+${type}\r\n`);
