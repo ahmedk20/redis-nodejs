@@ -194,7 +194,7 @@ const server = net.createServer((connection) => {
           if (timeout > 0) {
             clientInfo.timer = setTimeout(() => {
               if (clientInfo.active) {
-                connection.write("$-1\r\n"); // RESP nil
+                connection.write("*-1\r\n"); // Null array for BLPOP timeout
                 clientInfo.active = false;
               }
             }, timeout * 1000);
