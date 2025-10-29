@@ -206,20 +206,25 @@ const server = net.createServer((connection) => {
       }
 
       case "TYPE": {
-        const key = parts[4]; // should be parts[4], not parts[1] (bug fix)
-
-        let type;
+        const key = parts[4];
+      
         if (!store[key]) {
           connection.write("+none\r\n");
         } else if (Array.isArray(store[key])) {
-          connection.write("+list\r\n");
+          // Detect if this list contains stream objects
+          if (store[key].length > 0 && store[key][0].id) {
+            connection.write("+stream\r\n");
+          } else {
+            connection.write("+list\r\n");
+          }
         } else if (typeof store[key] === "object" && "value" in store[key]) {
           connection.write("+string\r\n");
         } else {
-          connection.write("+none\r\n"); // fallback (shouldn’t normally happen)
+          connection.write("+none\r\n");
         }
         break;
       }
+      
       case "XADD":{
         const key = parts[4];
         const idArg = parts[6];
