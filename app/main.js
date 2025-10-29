@@ -220,6 +220,37 @@ const server = net.createServer((connection) => {
         }
         break;
       }
+      case "XADD":{
+        const key = parts[4];
+        const idArg = parts[6];
+        const fieldValuePairs = parts.slice(8).filter((p) => !p.startsWith("$") && !p.startsWith("*"));
+        if (fieldValuePairs.length % 2 !== 0) {
+          connection.write("-ERR wrong number of arguments for 'xadd' command\r\n");
+          break;
+        }
+        //Generate id
+         let id;
+         if(idArg=="*"){
+          const timestamp=Date.now();
+          const sequence = 0;
+          id=`${timestamp}-${sequence}`;
+         }else{
+          id=idArg;
+         }
+        // Convert field-value pairs to an object
+        const fields = {};
+        for(let i=0;i<fieldValuePairs.length;i+=2){
+          fields[fieldValuePairs[i]] = fieldValuePairs[i + 1];
+        }
+        // Initialize stream if it doesn’t exist
+        if (!store[key]) store[key] = [];        
+        // Append entry
+        store[key].push({ id, fields });
+
+        // RESP Bulk String reply
+        connection.write(`$${id.length}\r\n${id}\r\n`);
+        break;
+      }
 
       default:
         connection.write("-ERR unknown command\r\n");
