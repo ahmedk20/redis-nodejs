@@ -239,13 +239,39 @@ const server = net.createServer((connection) => {
           const sequence = 0;
           id=`${timestamp}-${sequence}`;
          }else{
-          id=idArg;
-          const [msTime, sequence] = id.split("-");
+          // Validate ID format
+if (!/^\d+-\d+$/.test(id)) {
+  connection.write("-ERR Invalid stream ID format. Must be <msTime>-<sequence>\r\n");
+  return;
+}
 
-          if (msTime === "0" && sequence === "0") {
-              connection.write("-ERR The ID specified in XADD must be greater than 0-0\r\n");
-              return;
-          }
+const [msTimeStr, sequenceStr] = id.split("-");
+const msTime = Number(msTimeStr);
+const seqNum = Number(sequenceStr);
+
+if (isNaN(msTime) || isNaN(seqNum)) {
+  connection.write("-ERR The ID parts must be integers\r\n");
+  return;
+}
+
+if (msTime === 0 && seqNum === 0) {
+  connection.write("-ERR The ID specified in XADD must be greater than 0-0\r\n");
+  return;
+}
+
+// Validate ordering if stream already has entries
+if (store[key] && store[key].length > 0) {
+  const lastId = store[key][store[key].length - 1].id;
+  const [lastMs, lastSeq] = lastId.split("-").map(Number);
+
+  // Must be strictly greater
+  if (msTime < lastMs || (msTime === lastMs && seqNum <= lastSeq)) {
+    connection.write("-ERR The ID specified in XADD is equal or smaller than the last entry ID\r\n");
+    return;
+  }
+}
+
+
          }
         
         // Convert field-value pairs to an object
