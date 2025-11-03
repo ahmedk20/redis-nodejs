@@ -224,55 +224,75 @@ const server = net.createServer((connection) => {
         break;
       }
       
-      case "XADD":{
+      case "XADD": {
         const key = parts[4];
         const idArg = parts[6];
         const fieldValuePairs = parts.slice(8).filter((p) => !p.startsWith("$") && !p.startsWith("*"));
+      
         if (fieldValuePairs.length % 2 !== 0) {
           connection.write("-ERR wrong number of arguments for 'xadd' command\r\n");
           break;
         }
-        //Generate id
-         let id;
-         if(idArg=="*"){
-          const timestamp=Date.now();
+      
+        // Generate or parse ID
+        let id;
+        if (idArg === "*") {
+          const timestamp = Date.now();
           const sequence = 0;
-          id=`${timestamp}-${sequence}`;
-         }else{
-          id=idArg;  
-         }
-
-         const [msTime, sequence] = id.split("-");
-
-         if (msTime === "0" && sequence === "0") {
-             connection.write("-ERR The ID specified in XADD must be greater than 0-0\r\n");
-             return;
-         }
-         if (store[key] && store[key].length > 0) {
+          id = `${timestamp}-${sequence}`;
+        } else {
+          id = idArg;
+        }
+      
+        // Validate ID format
+        if (!/^\d+-\d+$/.test(id)) {
+          connection.write("-ERR Invalid stream ID format. Must be <msTime>-<sequence>\r\n");
+          break;
+        }
+      
+        const [msStr, seqStr] = id.split("-");
+        const msTime = Number(msStr);
+        const seqNum = Number(seqStr);
+      
+        if (isNaN(msTime) || isNaN(seqNum)) {
+          connection.write("-ERR The ID parts must be integers\r\n");
+          break;
+        }
+      
+        if (msTime === 0 && seqNum === 0) {
+          connection.write("-ERR The ID specified in XADD must be greater than 0-0\r\n");
+          break;
+        }
+      
+        // Initialize stream if it doesn’t exist
+        if (!store[key]) store[key] = [];
+      
+        // Validate ID ordering
+        if (store[key].length > 0) {
           const lastId = store[key][store[key].length - 1].id;
           const [lastMs, lastSeq] = lastId.split("-").map(Number);
-        
+      
           // Must be strictly greater
           if (msTime < lastMs || (msTime === lastMs && seqNum <= lastSeq)) {
             connection.write("-ERR The ID specified in XADD is equal or smaller than the last entry ID\r\n");
-            return;
+            break;
           }
         }
-        
-        // Convert field-value pairs to an object
+      
+        // Convert field-value pairs to object
         const fields = {};
-        for(let i=0;i<fieldValuePairs.length;i+=2){
+        for (let i = 0; i < fieldValuePairs.length; i += 2) {
           fields[fieldValuePairs[i]] = fieldValuePairs[i + 1];
         }
-        // Initialize stream if it doesn’t exist
-        if (!store[key]) store[key] = [];        
+      
         // Append entry
         store[key].push({ id, fields });
-
+      
         // RESP Bulk String reply
         connection.write(`$${id.length}\r\n${id}\r\n`);
         break;
       }
+      
 
       default:
         connection.write("-ERR unknown command\r\n");
