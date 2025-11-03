@@ -274,7 +274,7 @@ const server = net.createServer((connection) => {
       
           // Must be strictly greater
           if (msTime < lastMs || (msTime === lastMs && seqNum <= lastSeq)) {
-            connection.write("-ERR The ID specified in XADD is equal or smaller than the last entry ID\r\n");
+            connection.write("-ERR The ID specified in XADD is equal or smaller than the target stream top item\r\n");
             break;
           }
         }
