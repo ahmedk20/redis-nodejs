@@ -79,7 +79,6 @@ const server = net.createServer((connection) => {
         // ✅ Capture new length BEFORE serving waiting clients
         const newLength = store[key].length;
 
-        // Serve blocked clients
 
         // Serve blocked clients
         while (
@@ -241,7 +240,14 @@ const server = net.createServer((connection) => {
           id=`${timestamp}-${sequence}`;
          }else{
           id=idArg;
+          const [msTime, sequence] = id.split("-");
+
+          if (msTime === "0" && sequence === "0") {
+              connection.write("-ERR The ID specified in XADD must be greater than 0-0\r\n");
+              return;
+          }
          }
+        
         // Convert field-value pairs to an object
         const fields = {};
         for(let i=0;i<fieldValuePairs.length;i+=2){
