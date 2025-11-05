@@ -227,7 +227,9 @@ const server = net.createServer((connection) => {
       case "XADD": {
         const key = parts[4];
         const idArg = parts[6];
-        const fieldValuePairs = parts.slice(8).filter((p) => !p.startsWith("$") && !p.startsWith("*"));
+        const fieldValuePairs = parts
+          .slice(8)
+          .filter((p) => !p.startsWith("$") && !p.startsWith("*"));
       
         if (fieldValuePairs.length % 2 !== 0) {
           connection.write("-ERR wrong number of arguments for 'xadd' command\r\n");
@@ -237,14 +239,40 @@ const server = net.createServer((connection) => {
         // Generate or parse ID
         let id;
         if (idArg === "*") {
+          // Case 1: Auto-generate both timestamp & sequence
           const timestamp = Date.now();
           const sequence = 0;
           id = `${timestamp}-${sequence}`;
+      
+        } else if (/^\d+-\*$/.test(idArg)) {
+          // Case 2: Auto-generate sequence only
+          const timestamp = Number(idArg.split("-")[0]);
+      
+          if (isNaN(timestamp)) {
+            connection.write("-ERR Invalid timestamp in ID\r\n");
+            break;
+          }
+      
+          if (!store[key]) store[key] = [];
+      
+          // Find last entry with the same timestamp
+          const sameTimeEntries = store[key].filter(e => e.id.startsWith(timestamp + "-"));
+          let nextSeq = 0;
+      
+          if (sameTimeEntries.length > 0) {
+            const lastId = sameTimeEntries[sameTimeEntries.length - 1].id;
+            const lastSeq = Number(lastId.split("-")[1]);
+            nextSeq = lastSeq + 1;
+          }
+      
+          id = `${timestamp}-${nextSeq}`;
+      
         } else {
+          // Case 3: Explicit ID
           id = idArg;
         }
       
-        // Validate ID format
+        // Validate final ID format (after generation)
         if (!/^\d+-\d+$/.test(id)) {
           connection.write("-ERR Invalid stream ID format. Must be <msTime>-<sequence>\r\n");
           break;
@@ -259,22 +287,22 @@ const server = net.createServer((connection) => {
           break;
         }
       
-        if (msTime === 0 && seqNum === 0) {
+        // Only reject 0-0, not 0-* which becomes 0-0 initially
+        if (msTime === 0 && seqNum === 0 && idArg !== "0-*") {
           connection.write("-ERR The ID specified in XADD must be greater than 0-0\r\n");
           break;
         }
       
-        // Initialize stream if it doesn’t exist
         if (!store[key]) store[key] = [];
       
-        // Validate ID ordering
+        // Validate monotonic ordering
         if (store[key].length > 0) {
           const lastId = store[key][store[key].length - 1].id;
           const [lastMs, lastSeq] = lastId.split("-").map(Number);
-      
-          // Must be strictly greater
           if (msTime < lastMs || (msTime === lastMs && seqNum <= lastSeq)) {
-            connection.write("-ERR The ID specified in XADD is equal or smaller than the target stream top item\r\n");
+            connection.write(
+              "-ERR The ID specified in XADD is equal or smaller than the target stream top item\r\n"
+            );
             break;
           }
         }
@@ -292,6 +320,7 @@ const server = net.createServer((connection) => {
         connection.write(`$${id.length}\r\n${id}\r\n`);
         break;
       }
+      
       
 
       default:
